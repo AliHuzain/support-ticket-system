@@ -1,13 +1,8 @@
+from __future__ import annotations
 from enum import Enum
-from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List
-
-class TicketListResponse(BaseModel):
-    total: int
-    items: List[Ticket]
-    limit: int
-    offset: int
+from pydantic import BaseModel, Field
 
 
 class TicketStatus(str, Enum):
@@ -41,3 +36,10 @@ class Ticket(BaseModel):
 
 class TicketStatusUpdate(BaseModel):
     status: TicketStatus
+
+
+class TicketListResponse(BaseModel):
+    total: int
+    items: List[Ticket]
+    limit: int
+    offset: int
