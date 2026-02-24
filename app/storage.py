@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import uuid4
 from datetime import datetime
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, or_, and_, update
 from sqlalchemy.orm import Session
 
 from .models import Ticket, TicketCreate, TicketStatus
@@ -28,8 +28,34 @@ def create_ticket(db: Session, payload: TicketCreate) -> Ticket:
     return _to_ticket(row)
 
 
-def list_tickets(db: Session) -> List[Ticket]:
-    rows = db.execute(select(TicketDB)).scalars().all()
+def list_tickets(
+    db: Session,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> List[Ticket]:
+    stmt = select(TicketDB)
+
+    if status:
+        stmt = stmt.where(TicketDB.status == status)
+
+    if priority:
+        stmt = stmt.where(TicketDB.priority == priority)
+
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                TicketDB.title.ilike(like),
+                TicketDB.description.ilike(like),
+            )
+        )
+
+    stmt = stmt.order_by(TicketDB.created_at.desc()).limit(limit).offset(offset)
+
+    rows = db.execute(stmt).scalars().all()
     return [_to_ticket(r) for r in rows]
 
 
