@@ -1,65 +1,54 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List
-from uuid import uuid4
+from fastapi import FastAPI, HTTPException, Query
+from typing import List, Optional
+
+from .models import Ticket, TicketCreate, TicketStatus, TicketPriority, TicketStatusUpdate
+from . import storage
 
 app = FastAPI(title="Support Ticket System")
 
-class TicketCreate(BaseModel):
-    title: str
-    description: str
-
-class Ticket(BaseModel):
-    id: str
-    title: str
-    description: str
-    status: str
-
-TICKETS: List[Ticket] = []
 
 @app.get("/")
 def health():
     return {"status": "ok", "service": "support-ticket-system"}
 
+
 @app.post("/tickets", response_model=Ticket)
 def create_ticket(payload: TicketCreate):
-    ticket = Ticket(
-        id=str(uuid4()),
-        title=payload.title,
-        description=payload.description,
-        status="Open",
-    )
-    TICKETS.append(ticket)
-    return ticket
+    return storage.create_ticket(payload)
+
 
 @app.get("/tickets", response_model=List[Ticket])
-def list_tickets():
-    return TICKETS
+def list_tickets(
+    status: Optional[TicketStatus] = Query(default=None),
+    priority: Optional[TicketPriority] = Query(default=None),
+):
+    tickets = storage.list_tickets()
+    if status:
+        tickets = [t for t in tickets if t.status == status]
+    if priority:
+        tickets = [t for t in tickets if t.priority == priority]
+    return tickets
 
-from fastapi import HTTPException
-
-@app.post("/tickets/{ticket_id}/close", response_model=Ticket)
-def close_ticket(ticket_id: str):
-    for t in TICKETS:
-        if t.id == ticket_id:
-            t.status = "Closed"
-            return t
-    raise HTTPException(status_code=404, detail="Ticket not found")
-
-
-from fastapi import HTTPException
 
 @app.get("/tickets/{ticket_id}", response_model=Ticket)
 def get_ticket(ticket_id: str):
-    for t in TICKETS:
-        if t.id == ticket_id:
-            return t
-    raise HTTPException(status_code=404, detail="Ticket not found")
+    t = storage.get_ticket(ticket_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return t
+
+
+@app.patch("/tickets/{ticket_id}/status", response_model=Ticket)
+def set_status(ticket_id: str, payload: TicketStatusUpdate):
+    t = storage.update_status(ticket_id, payload.status)
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return t
+
 
 @app.delete("/tickets/{ticket_id}")
 def delete_ticket(ticket_id: str):
-    for i, t in enumerate(TICKETS):
-        if t.id == ticket_id:
-            TICKETS.pop(i)
-            return {"message": "Ticket deleted", "id": ticket_id}
-    raise HTTPException(status_code=404, detail="Ticket not found")
+    ok = storage.delete_ticket(ticket_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return {"message": "Ticket deleted", "id": ticket_id}
