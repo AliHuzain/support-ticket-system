@@ -1,14 +1,24 @@
 from fastapi import FastAPI, HTTPException, Query, Depends
 from typing import List, Optional
 from sqlalchemy.orm import Session
+
 from .db import SessionLocal, engine
 from .db_models import TicketDB
-from .models import Ticket, TicketCreate, TicketStatus, TicketPriority, TicketStatusUpdate
+from .models import (
+    Ticket,
+    TicketCreate,
+    TicketStatus,
+    TicketPriority,
+    TicketStatusUpdate,
+    TicketListResponse,
+)
 from . import storage
-from .models import TicketListResponse
 
+# Create tables (simple approach for this project)
 TicketDB.metadata.create_all(bind=engine)
+
 app = FastAPI(title="Support Ticket System")
+
 
 def get_db():
     db = SessionLocal()
@@ -16,6 +26,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 @app.get("/")
 def health():
@@ -53,24 +64,12 @@ def list_tickets(
     return {"total": total, "items": items, "limit": limit, "offset": offset}
 
 
-@app.get("/tickets", response_model=List[Ticket])
-def list_tickets(
-    status: Optional[TicketStatus] = Query(default=None),
-    priority: Optional[TicketPriority] = Query(default=None),
-    q: Optional[str] = Query(default=None, description="Search in title/description"),
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
-):
-    return storage.list_tickets(
-        db=db,
-        status=status.value if status else None,
-        priority=priority.value if priority else None,
-        q=q,
-        limit=limit,
-        offset=offset,
-    )
-
+@app.get("/tickets/{ticket_id}", response_model=Ticket)
+def get_ticket(ticket_id: str, db: Session = Depends(get_db)):
+    t = storage.get_ticket(db, ticket_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return t
 
 
 @app.patch("/tickets/{ticket_id}/status", response_model=Ticket)
