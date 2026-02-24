@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import uuid4
 from datetime import datetime
 
-from sqlalchemy import select, delete, or_, and_, update
+from sqlalchemy import select, delete, or_, and_, update, func
 from sqlalchemy.orm import Session
 
 from .models import Ticket, TicketCreate, TicketStatus
@@ -90,3 +90,22 @@ def _to_ticket(row: TicketDB) -> Ticket:
         status=row.status,
         created_at=row.created_at,
     )
+
+def count_tickets(
+    db: Session,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    q: Optional[str] = None,
+) -> int:
+    stmt = select(func.count()).select_from(TicketDB)
+
+    if status:
+        stmt = stmt.where(TicketDB.status == status)
+    if priority:
+        stmt = stmt.where(TicketDB.priority == priority)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(TicketDB.title.ilike(like), TicketDB.description.ilike(like)))
+
+    return db.execute(stmt).scalar_one()
+
